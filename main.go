@@ -13,9 +13,6 @@ import (
 	vegeta "github.com/tsenart/vegeta/lib"
 )
 
-// I HAVE PATCHED THE VEGETA LIBRARY TO ACCEPT URL ENCODED POSTS
-// DO NOT UPDATE THE VENDOR LIBS
-
 type Vector struct {
 	rate            int
 	duration        time.Duration
@@ -118,6 +115,7 @@ func getTargets(numberOfTargets int, env string) []byte {
 		if i > simultaneousConnections {
 			msg := <-messages
 			targets = append(targets, msg...)
+			targets = append(targets, []byte("\n")...)
 			fmt.Printf("Completed %v of %v\n", i-simultaneousConnections, numberOfTargets)
 		}
 	}
@@ -126,6 +124,9 @@ func getTargets(numberOfTargets int, env string) []byte {
 	for i := 1; i <= simultaneousConnections; i++ {
 		msg := <-messages
 		targets = append(targets, msg...)
+		if i != simultaneousConnections {
+			targets = append(targets, []byte("\n")...)
+		}
 		fmt.Printf("Completed %v of %v\n", numberOfTargets-simultaneousConnections+i, numberOfTargets)
 	}
 	fmt.Println("Done")
