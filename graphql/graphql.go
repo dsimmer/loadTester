@@ -21,7 +21,6 @@ func timeTrack(start time.Time, name string) {
 var sampleSecretKey = []byte("JWTSecret")
 
 func generateJWT() (string, error) {
-	time.Sleep(time.Millisecond)
 	token := jwt.New(jwt.SigningMethodHS256)
 	token.Claims = jwt.MapClaims{
 		"exp": time.Now().Add(time.Hour * 72).Unix(),
@@ -70,19 +69,16 @@ func getTarget(chann chan vegeta.Target, env string) {
 	// The target API is urlencoded, not json
 	targetter := vegeta.Target{}
 
-	targetter.URL = "https://rc-billing.smokeball.com/v2/billing/staff-permissions/authorise-user/42a1f054-820c-42c6-bc77-ed6b2ce67fac/"
+	targetter.URL = "http://localhost:9001/v2/integration/webapp-graphql-server/58379d99-180d-4560-bf1d-ffd5511d0c5f/"
+	// targetter.URL = "https://rc-billing.smokeball.com/v2/integration/webapp-graphql-server/58379d99-180d-4560-bf1d-ffd5511d0c5f/"
 
-	targetter.Method = "GET"
+	targetter.Method = "POST"
 	header := http.Header{}
 
-	newToken, err := generateJWT()
-
-	if err != nil {
-		retry(err, chann, env)
-		return
-	}
-
-	header.Set("Authorization", "Bearer "+newToken)
+	targetter.Body = []byte(`[{"operationName":"MatterStatusCounts","variables":{"filter":{"excludeBillableLeadMatters":false,"matterStatus":["open","pending","closed","deleted"]}},"query":"query MatterStatusCounts($filter: MatterStatusCountsFilter) {\n  matterStatusCounts(filter: $filter) {\n    status\n    count\n    __typename\n  }\n}\n"},{"operationName":"StaffMembersList","variables":{"filter":{"excludeFormerStaff":true,"excludeStaffWithoutMatter":true}},"query":"query StaffMembersList($filter: StaffMemberFilter) {\n  staffMembersList(filter: $filter) {\n    results {\n      id\n      firstName\n      lastName\n      initials\n      __typename\n    }\n    __typename\n  }\n}\n"},{"operationName":"MatterTypesFilter","variables":{"filter":{"excludeMatterTypeWithoutMatter":true}},"query":"query MatterTypesFilter($filter: MatterTypeFilter) {\n  matterTypeList(filter: $filter) {\n    results {\n      matterTypeId\n      matterTypeIdWithoutLocation\n      name\n      categories\n      __typename\n    }\n    __typename\n  }\n}\n"}]`)
+	header.Set("Content-type", "application/json")
+	header.Set("cache-control", "no-cache")
+	header.Set("Authorization", "Bearer ")
 
 	targetter.Header = header
 
@@ -151,12 +147,12 @@ func orchestrateAttack(vectors []Vector, env string) {
 func main() {
 	env := "local"
 	attackSession := []Vector{
-		// {rate: 1, duration: time.Second, numberOfTargets: 10000},
-		// {rate: 10, duration: 10 * time.Second, numberOfTargets: 10000},
-		// {rate: 100, duration: time.Second, numberOfTargets: 10000},
-		{rate: 100, duration: 5 * time.Second, numberOfTargets: 10000},
-		// {rate: 250, duration: time.Second, numberOfTargets: 10000},
-		// {rate: 250, duration: 5 * time.Second, numberOfTargets: 10000},
+		// {rate: 1, duration: time.Second, numberOfTargets: 1},
+		// {rate: 10, duration: 10 * time.Second, numberOfTargets: 1},
+		// {rate: 100, duration: time.Second, numberOfTargets: 1},
+		{rate: 100, duration: 5 * time.Second, numberOfTargets: 1},
+		// {rate: 250, duration: time.Second, numberOfTargets: 1},
+		// {rate: 250, duration: 5 * time.Second, numberOfTargets: 1},
 	}
 	orchestrateAttack(attackSession, env)
 }
