@@ -18,7 +18,15 @@ func timeTrack(start time.Time, name string) {
 	log.Printf("%s took %s", name, elapsed)
 }
 
-var sampleSecretKey = []byte("JWTSecret")
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
 
 func generateJWT() (string, error) {
 	time.Sleep(time.Millisecond)
@@ -48,26 +56,8 @@ func check(err error) {
 	}
 }
 
-func retry(err error, chann chan vegeta.Target, env string) {
-	fmt.Println("Error, sleeping to try again another day")
-	fmt.Println(err.Error())
-	time.Sleep(time.Second)
-	getTarget(chann, env)
-}
-
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
-}
-
 // getTarget is an implementation specific, thread safe function that will create a call and return the target format required by the test
-func getTarget(chann chan vegeta.Target, env string) {
-	// The target API is urlencoded, not json
+func getTarget(chann chan vegeta.Target) {
 	targetter := vegeta.Target{}
 
 	targetter.URL = "https://rc-billing.smokeball.com/v2/billing/staff-permissions/authorise-user/42a1f054-820c-42c6-bc77-ed6b2ce67fac/"
@@ -78,7 +68,8 @@ func getTarget(chann chan vegeta.Target, env string) {
 	newToken, err := generateJWT()
 
 	if err != nil {
-		retry(err, chann, env)
+		// We can push this error to the queue so the caller isnt blocked waiting for it, but this is a command line utility and we will see the error in the logs
+		fmt.Println(err.Error())
 		return
 	}
 
@@ -90,7 +81,7 @@ func getTarget(chann chan vegeta.Target, env string) {
 }
 
 // getTargets is a generic target fetcher
-func getTargets(numberOfTargets int, env string) []vegeta.Target {
+func getTargets(numberOfTargets int) []vegeta.Target {
 	fmt.Println("Creating targets")
 	defer timeTrack(time.Now(), "Target creation")
 	// Hitting the server with 1000 concurrent requests is a good way to have 0 successful responses
@@ -100,24 +91,23 @@ func getTargets(numberOfTargets int, env string) []vegeta.Target {
 
 	for i := 1; i <= numberOfTargets; i++ {
 		// Create a new goroutine (like a thread, but lightweight - more like an Erlang process)
-		go getTarget(messages, env)
+		go getTarget(messages)
 	}
 	for i := 1; i <= numberOfTargets; i++ {
 		// Pulling from a channel will block until a result is available.
 		msg := <-messages
 		targets = append(targets, msg)
-		// fmt.Printf("Completed %v of %v\n", i, numberOfTargets)
 	}
 
 	return targets
 }
 
-func orchestrateAttack(vectors []Vector, env string) {
+func orchestrateAttack(vectors []Vector) {
 	for _, vector := range vectors {
 		rate := vegeta.Rate{Freq: vector.rate, Per: time.Second}
 
 		// Preloads all our data since each request is unique. Otherwise we wouldn't be able to sustain the require rate a load test requires
-		targets := getTargets(vector.numberOfTargets, env)
+		targets := getTargets(vector.numberOfTargets)
 
 		// Loads the targets into a round robin targetter (otherwise when requests > targets then we will receive an error)
 		targeter := vegeta.NewStaticTargeter(targets...)
@@ -149,7 +139,6 @@ func orchestrateAttack(vectors []Vector, env string) {
 }
 
 func main() {
-	env := "local"
 	attackSession := []Vector{
 		// {rate: 1, duration: time.Second, numberOfTargets: 10000},
 		// {rate: 10, duration: 10 * time.Second, numberOfTargets: 10000},
@@ -158,5 +147,5 @@ func main() {
 		// {rate: 250, duration: time.Second, numberOfTargets: 10000},
 		// {rate: 250, duration: 5 * time.Second, numberOfTargets: 10000},
 	}
-	orchestrateAttack(attackSession, env)
+	orchestrateAttack(attackSession)
 }

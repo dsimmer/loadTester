@@ -18,7 +18,15 @@ func timeTrack(start time.Time, name string) {
 	log.Printf("%s took %s", name, elapsed)
 }
 
-var sampleSecretKey = []byte("JWTSecret")
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
 
 func generateJWT() (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
@@ -45,23 +53,6 @@ func check(err error) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func retry(err error, chann chan vegeta.Target, env string) {
-	fmt.Println("Error, sleeping to try again another day")
-	fmt.Println(err.Error())
-	time.Sleep(time.Second)
-	getTarget(chann, env)
-}
-
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
 }
 
 // getTarget is an implementation specific, thread safe function that will create a call and return the target format required by the test
@@ -102,7 +93,6 @@ func getTargets(numberOfTargets int, env string) []vegeta.Target {
 		// Pulling from a channel will block until a result is available.
 		msg := <-messages
 		targets = append(targets, msg)
-		// fmt.Printf("Completed %v of %v\n", i, numberOfTargets)
 	}
 
 	return targets

@@ -18,7 +18,15 @@ func timeTrack(start time.Time, name string) {
 	log.Printf("%s took %s", name, elapsed)
 }
 
-var sampleSecretKey = []byte("JWTSecret")
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
 
 func generateJWT() (string, error) {
 	time.Sleep(time.Millisecond)
@@ -34,16 +42,6 @@ func generateJWT() (string, error) {
 	}
 
 	return tokenString, nil
-}
-
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
 }
 
 type Vector struct {
@@ -95,7 +93,6 @@ func getTargets(numberOfTargets int) []vegeta.Target {
 			continue
 		}
 		targets = append(targets, target)
-		// fmt.Printf("Completed %v of %v\n", i, numberOfTargets)
 	}
 	return targets
 }
@@ -103,11 +100,12 @@ func getTargets(numberOfTargets int) []vegeta.Target {
 func orchestrateAttack(vectors []Vector) {
 	for _, vector := range vectors {
 		rate := vegeta.Rate{Freq: vector.rate, Per: time.Second}
-		duration := vector.duration
 
+		// Preloads all our data since each request is unique. Otherwise we wouldn't be able to sustain the require rate a load test requires
 		targets := getTargets(vector.numberOfTargets)
-		targeter := vegeta.NewStaticTargeter(targets...)
 
+		// Loads the targets into a round robin targetter (otherwise when requests > targets then we will receive an error)
+		targeter := vegeta.NewStaticTargeter(targets...)
 		attacker := vegeta.NewAttacker()
 
 		var metrics vegeta.Metrics
@@ -119,7 +117,9 @@ func orchestrateAttack(vectors []Vector) {
 		rep, report = vegeta.NewTextReporter(&metrics), &metrics
 
 		fmt.Println("started attack")
-		for res := range attacker.Attack(targeter, rate, duration, "perf") {
+		for res := range attacker.Attack(targeter, rate, vector.duration, "perf") {
+			//print body
+			// fmt.Println(string(res.Body))
 			report.Add(res)
 		}
 		if c, ok := report.(vegeta.Closer); ok {
